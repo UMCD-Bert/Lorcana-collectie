@@ -282,7 +282,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v1.8";
+const APP_VERSION = "v1.9";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
@@ -633,7 +633,7 @@ async function renderSetSummary() {
   });
   document.getElementById('setValueLabel').textContent = '$' + setValue.toFixed(2);
 
-  const top3 = entries.sort((a, b) => b.prijs - a.prijs).slice(0, 6);
+  const top3 = entries.sort((a, b) => b.prijs - a.prijs).slice(0, 5);
   document.getElementById('setTop3').innerHTML = top3.length
     ? top3.map(t => `
         <div class="ssr-top3-card">
