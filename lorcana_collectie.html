@@ -57,7 +57,7 @@
     display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
     gap: 12px; max-width: 1100px; margin: 0 auto;
   }
-  .top-value-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); max-width: 980px; }
+  .top-value-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); max-width: 1100px; gap: 16px; }
   .lc-card {
     background: white; border-radius: 12px; padding: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12);
     text-align: center; position: relative;
@@ -282,7 +282,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v1.6";
+const APP_VERSION = "v1.7";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
