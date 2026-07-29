@@ -90,15 +90,16 @@
   }
   .ssr-gauge { text-align: center; flex: none; }
   .ssr-gauge .gauge-svg { width: 120px; }
-  .ssr-stats { flex: 1; min-width: 0; }
-  .ssr-line { display: flex; justify-content: space-between; font-size: 13.5px; color: #2c3e50; margin-bottom: 4px; }
-  .ssr-top3 { display: flex; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ddd; }
-  .ssr-top3-card { flex: 1; min-width: 0; text-align: center; background: #f7f9fa; border-radius: 8px; padding: 6px; }
-  .ssr-top3-card img { width: 100%; border-radius: 6px; display: block; background: #eef1f4; }
+  .ssr-stats { flex: 1; min-width: 0; display: flex; align-items: center; gap: 20px; }
+  .ssr-values { flex: none; min-width: 170px; }
+  .ssr-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; color: #2c3e50; margin-bottom: 4px; }
+  .ssr-top3 { display: flex; gap: 8px; flex: 1; min-width: 0; padding-left: 16px; border-left: 1px dashed #ddd; }
+  .ssr-top3-card { flex: none; width: 64px; text-align: center; background: #f7f9fa; border-radius: 8px; padding: 4px; }
+  .ssr-top3-card img { width: 100%; border-radius: 5px; display: block; background: #eef1f4; }
   .ssr-top3-card .ssr-top3-name {
-    font-size: 10.5px; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 9px; color: #666; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .ssr-top3-card .ssr-top3-price { font-size: 12px; font-weight: 700; color: #2c3e50; margin-top: 1px; }
+  .ssr-top3-card .ssr-top3-price { font-size: 10.5px; font-weight: 700; color: #2c3e50; margin-top: 1px; }
   .ssr-top3-empty { flex: 1; text-align: center; color: #999; font-style: italic; font-size: 12.5px; }
 
   .ink-Amber { background: #d99a1f; }
@@ -218,8 +219,10 @@
       <div id="setGaugeLabel" class="gauge-label">0 / 0</div>
     </div>
     <div class="ssr-stats">
-      <div class="ssr-line"><span>Waarde van deze set</span><b id="setValueLabel">$0.00</b></div>
-      <div class="ssr-line"><span>Totale collectiewaarde</span><b id="collValueLabel">$0.00</b></div>
+      <div class="ssr-values">
+        <div class="ssr-line"><span>Waarde van deze set</span><b id="setValueLabel">$0.00</b></div>
+        <div class="ssr-line"><span>Totale collectiewaarde</span><b id="collValueLabel">$0.00</b></div>
+      </div>
       <div class="ssr-top3" id="setTop3"></div>
     </div>
   </div>
@@ -278,7 +281,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v1.3";
+const APP_VERSION = "v1.4";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
