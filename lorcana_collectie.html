@@ -85,17 +85,21 @@
 
   .set-summary-row {
     display: none; align-items: flex-start; justify-content: center; gap: 22px;
-    max-width: 700px; margin: 0 auto 16px; background: white; border-radius: 12px;
+    max-width: 1100px; margin: 0 auto 16px; background: white; border-radius: 12px;
     padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
   .ssr-gauge { text-align: center; flex: none; }
   .ssr-gauge .gauge-svg { width: 120px; }
   .ssr-stats { flex: 1; min-width: 0; }
   .ssr-line { display: flex; justify-content: space-between; font-size: 13.5px; color: #2c3e50; margin-bottom: 4px; }
-  .ssr-top3 { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ddd; }
-  .ssr-top3-item { font-size: 12.5px; color: #444; margin-bottom: 2px; }
-  .ssr-top3-item span { color: #888; }
-  .ssr-top3-item.empty { color: #999; font-style: italic; }
+  .ssr-top3 { display: flex; gap: 10px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ddd; }
+  .ssr-top3-card { flex: 1; min-width: 0; text-align: center; background: #f7f9fa; border-radius: 8px; padding: 6px; }
+  .ssr-top3-card img { width: 100%; border-radius: 6px; display: block; background: #eef1f4; }
+  .ssr-top3-card .ssr-top3-name {
+    font-size: 10.5px; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ssr-top3-card .ssr-top3-price { font-size: 12px; font-weight: 700; color: #2c3e50; margin-top: 1px; }
+  .ssr-top3-empty { flex: 1; text-align: center; color: #999; font-style: italic; font-size: 12.5px; }
 
   .ink-Amber { background: #d99a1f; }
   .ink-Amethyst { background: #9b59b6; }
@@ -236,7 +240,7 @@
 
   <div id="bulkPanel">
     <button id="bulkStartBtn">🔄 Alle sets ophalen (Lorcast)</button>
-    <button id="topValueBtn" class="secondary">💰 Topwaarde van je collectie</button>
+    <button id="statusPerSetBtn" class="secondary">📋 Status per set</button>
     <div id="bulkProgressWrap">
       <div id="bulkBarTrack"><div id="bulkBarFill"></div></div>
       <div id="bulkStatusText"></div>
@@ -244,8 +248,10 @@
     <div id="bulkLog"></div>
   </div>
 
-  <div id="setProgressList"></div>
-  <div id="topValueList" class="card-grid" style="display:none;"></div>
+  <div id="setProgressList" style="display:none;"></div>
+
+  <h3 style="text-align:center;color:#2c3e50;font-size:15px;margin:18px 0 10px;">💰 Topwaarde van je collectie</h3>
+  <div id="topValueList" class="card-grid"></div>
 </div>
 
 <!-- ===== DETAIL MODAL ===== -->
@@ -272,7 +278,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v1.1";
+const APP_VERSION = "v1.3";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
@@ -475,7 +481,17 @@ function isOwned(parentId) {
   return !!(ex && ((ex.Normaal && ex.Normaal.aantal > 0) || (ex.Foil && ex.Foil.aantal > 0)));
 }
 
+function versieBeschikbaar(k, versie) {
+  const prijs = versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+  const ex = exemplarenByParent[k.id] || {};
+  const aantal = ex[versie] ? ex[versie].aantal : 0;
+  // Ontbrekende prijsdata betekent meestal dat deze versie niet bestaat (bv. Enchanted = alleen foil).
+  // Als je 'm al in bezit hebt, blijft de rij zichtbaar zodat je 'm kunt beheren.
+  return prijs !== null && prijs !== undefined || aantal > 0;
+}
+
 function versionRowHtml(k, versie) {
+  if (!versieBeschikbaar(k, versie)) return '';
   const ex = exemplarenByParent[k.id] || {};
   const rec = ex[versie];
   const aantal = rec ? rec.aantal : 0;
@@ -603,20 +619,25 @@ async function renderSetSummary() {
     if (ex.Normaal && ex.Normaal.aantal > 0) {
       const p = k.prijs_normaal || 0;
       setValue += p * ex.Normaal.aantal;
-      entries.push({ naam: k.naam, versie: 'Normaal', prijs: p });
+      entries.push({ naam: k.naam, versie: 'Normaal', prijs: p, afbeelding: k.afbeelding });
     }
     if (ex.Foil && ex.Foil.aantal > 0) {
       const p = k.prijs_foil || 0;
       setValue += p * ex.Foil.aantal;
-      entries.push({ naam: k.naam, versie: 'Foil', prijs: p });
+      entries.push({ naam: k.naam, versie: 'Foil', prijs: p, afbeelding: k.afbeelding });
     }
   });
   document.getElementById('setValueLabel').textContent = '$' + setValue.toFixed(2);
 
   const top3 = entries.sort((a, b) => b.prijs - a.prijs).slice(0, 3);
   document.getElementById('setTop3').innerHTML = top3.length
-    ? top3.map(t => `<div class="ssr-top3-item">${t.naam} <span>(${t.versie})</span> — $${t.prijs.toFixed(2)}</div>`).join('')
-    : '<div class="ssr-top3-item empty">Nog geen kaarten in bezit in deze set.</div>';
+    ? top3.map(t => `
+        <div class="ssr-top3-card">
+          <img src="${t.afbeelding || ''}" alt="">
+          <div class="ssr-top3-name">${t.naam}</div>
+          <div class="ssr-top3-price">$${t.prijs.toFixed(2)} <span style="color:#999;font-weight:400;">(${t.versie})</span></div>
+        </div>`).join('')
+    : '<div class="ssr-top3-empty">Nog geen kaarten in bezit in deze set.</div>';
 
   const collValue = await computeCollectionTotalValue();
   document.getElementById('collValueLabel').textContent = '$' + collValue.toFixed(2);
@@ -658,7 +679,7 @@ async function openDetail(parentId) {
   document.getElementById('mdFlavor').textContent = kaart.flavor_text || '';
 
   const ex = exemplarenByParent[parentId] || {};
-  document.getElementById('mdVersionRows').innerHTML = ['Normaal', 'Foil'].map(v => {
+  document.getElementById('mdVersionRows').innerHTML = ['Normaal', 'Foil'].filter(v => versieBeschikbaar(kaart, v)).map(v => {
     const aantal = ex[v] ? ex[v].aantal : 0;
     return `
     <div class="version-row">
@@ -693,39 +714,67 @@ document.getElementById('cardDetailModal').addEventListener('click', (e) => {
    ============================================================ */
 async function renderCollectieTab() {
   if (!sb) return;
-  const { data: kaarten } = await sb.from('lorcana_set_kaarten').select('id,set_code,set_naam').range(0, 9999);
-  const { data: exemplaren } = await sb.from('lorcana_exemplaren').select('parent_id,versie,aantal').range(0, 9999);
+  const topValueList = document.getElementById('topValueList');
+  try {
+    const { data: kaarten, error: errKrt } = await sb.from('lorcana_set_kaarten').select('*').range(0, 9999);
+    if (errKrt) throw errKrt;
+    const { data: exemplaren, error: errEx } = await sb.from('lorcana_exemplaren').select('parent_id,versie,aantal').range(0, 9999);
+    if (errEx) throw errEx;
 
-  const ownedParents = new Set((exemplaren || []).filter(e => e.aantal > 0).map(e => e.parent_id));
-  const perSet = {};
-  (kaarten || []).forEach(k => {
-    perSet[k.set_code] = perSet[k.set_code] || { naam: k.set_naam, total: 0, owned: 0 };
-    perSet[k.set_code].total++;
-    if (ownedParents.has(k.id)) perSet[k.set_code].owned++;
-  });
+    const byId = {};
+    (kaarten || []).forEach(k => byId[k.id] = k);
+    const ownedExemplaren = (exemplaren || []).filter(e => e.aantal > 0);
+    const ownedParents = new Set(ownedExemplaren.map(e => e.parent_id));
 
-  const totalCards = (kaarten || []).length;
-  const ownedCards = ownedParents.size;
-  updateGauge('coll', ownedCards, totalCards);
-
-  document.getElementById('setProgressList').innerHTML = Object.entries(perSet).map(([code, s]) => {
-    const pct = s.total ? Math.round((s.owned / s.total) * 100) : 0;
-    return `
-    <div class="set-progress-row" data-set="${code}">
-      <div class="spr-name">${s.naam}</div>
-      <div class="spr-bar-track"><div class="spr-bar-fill" style="width:${pct}%"></div></div>
-      <div class="spr-count">${s.owned}/${s.total}</div>
-    </div>`;
-  }).join('') || '<div class="empty-msg">Nog geen sets opgehaald. Gebruik "Alle sets ophalen" hierboven.</div>';
-
-  document.querySelectorAll('.set-progress-row').forEach(row => {
-    row.addEventListener('click', () => {
-      document.getElementById('setSelect').value = row.dataset.set;
-      currentSetCode = row.dataset.set;
-      loadSetTab();
-      document.querySelector('.tab-btn[data-tab="sets"]').click();
+    const perSet = {};
+    (kaarten || []).forEach(k => {
+      perSet[k.set_code] = perSet[k.set_code] || { naam: k.set_naam, total: 0, owned: 0 };
+      perSet[k.set_code].total++;
+      if (ownedParents.has(k.id)) perSet[k.set_code].owned++;
     });
-  });
+
+    const totalCards = (kaarten || []).length;
+    const ownedCards = ownedParents.size;
+    updateGauge('coll', ownedCards, totalCards);
+
+    document.getElementById('setProgressList').innerHTML = Object.entries(perSet).map(([code, s]) => {
+      const pct = s.total ? Math.round((s.owned / s.total) * 100) : 0;
+      return `
+      <div class="set-progress-row" data-set="${code}">
+        <div class="spr-name">${s.naam}</div>
+        <div class="spr-bar-track"><div class="spr-bar-fill" style="width:${pct}%"></div></div>
+        <div class="spr-count">${s.owned}/${s.total}</div>
+      </div>`;
+    }).join('') || '<div class="empty-msg">Nog geen sets opgehaald. Gebruik "Alle sets ophalen" hierboven.</div>';
+
+    document.querySelectorAll('.set-progress-row').forEach(row => {
+      row.addEventListener('click', () => {
+        document.getElementById('setSelect').value = row.dataset.set;
+        currentSetCode = row.dataset.set;
+        loadSetTab();
+        document.querySelector('.tab-btn[data-tab="sets"]').click();
+      });
+    });
+
+    const rows = ownedExemplaren.map(e => {
+      const k = byId[e.parent_id];
+      if (!k) return null;
+      const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+      return { k, versie: e.versie, prijs: prijs || 0 };
+    }).filter(Boolean).sort((a, b) => b.prijs - a.prijs).slice(0, 30);
+
+    topValueList.innerHTML = rows.length ? rows.map(r => `
+      <div class="lc-card owned">
+        <img src="${r.k.afbeelding || ''}">
+        <div class="badges">${inkBadge(r.k.ink)}${rarityBadge(r.k.rarity)}</div>
+        <div class="name">${r.k.naam}</div>
+        <div class="version">${r.versie} — $${r.prijs.toFixed(2)}</div>
+        <div class="num">#${r.k.collector_number} · ${r.k.set_naam}</div>
+      </div>`).join('') : '<div class="empty-msg">Nog geen kaarten in bezit.</div>';
+  } catch (err) {
+    console.error(err);
+    topValueList.innerHTML = `<div class="empty-msg">Kon topwaarde niet laden: ${err && err.message ? err.message : err}</div>`;
+  }
 }
 
 /* ============================================================
@@ -766,56 +815,14 @@ document.getElementById('bulkStartBtn').addEventListener('click', async () => {
 });
 
 /* ============================================================
-   TOPWAARDE
+   STATUS PER SET (toggle)
    ============================================================ */
 let topValueCache = [];
-document.getElementById('topValueBtn').addEventListener('click', async () => {
-  if (!sb) return alert('Configureer eerst Supabase (zie banner bovenaan).');
-  const list = document.getElementById('topValueList');
-
-  if (list.classList.contains('open')) {
-    list.classList.remove('open');
-    list.style.display = 'none';
-    return;
-  }
-
-  try {
-    const { data: exemplaren, error: errEx } = await sb.from('lorcana_exemplaren').select('*').gt('aantal', 0).range(0, 9999);
-    if (errEx) throw errEx;
-    const parentIds = [...new Set((exemplaren || []).map(e => e.parent_id))];
-    if (!parentIds.length) {
-      list.innerHTML = '<div class="empty-msg">Nog geen kaarten in bezit.</div>';
-      list.style.display = 'grid';
-      list.classList.add('open');
-      return;
-    }
-
-    const { data: kaarten, error: errKrt } = await sb.from('lorcana_set_kaarten').select('*').in('id', parentIds).range(0, 9999);
-    if (errKrt) throw errKrt;
-    topValueCache = kaarten || [];
-    const byId = {}; topValueCache.forEach(k => byId[k.id] = k);
-
-    const rows = (exemplaren || []).map(e => {
-      const k = byId[e.parent_id];
-      if (!k) return null;
-      const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
-      return { k, versie: e.versie, prijs: prijs || 0 };
-    }).filter(Boolean).sort((a, b) => b.prijs - a.prijs).slice(0, 30);
-
-    list.innerHTML = rows.length ? rows.map(r => `
-      <div class="lc-card owned">
-        <img src="${r.k.afbeelding || ''}">
-        <div class="badges">${inkBadge(r.k.ink)}${rarityBadge(r.k.rarity)}</div>
-        <div class="name">${r.k.naam}</div>
-        <div class="version">${r.versie} — $${r.prijs.toFixed(2)}</div>
-        <div class="num">#${r.k.collector_number} · ${r.k.set_naam}</div>
-      </div>`).join('') : '<div class="empty-msg">Geen prijsinformatie beschikbaar voor je kaarten.</div>';
-    list.style.display = 'grid';
-    list.classList.add('open');
-  } catch (err) {
-    console.error(err);
-    alert('Kon topwaarde niet laden: ' + (err && err.message ? err.message : err));
-  }
+document.getElementById('statusPerSetBtn').addEventListener('click', () => {
+  const wrap = document.getElementById('setProgressList');
+  const open = wrap.classList.toggle('open');
+  wrap.style.display = open ? 'block' : 'none';
+  document.getElementById('statusPerSetBtn').textContent = open ? '📋 Status per set verbergen' : '📋 Status per set';
 });
 
 /* ============================================================
@@ -867,6 +874,7 @@ document.getElementById('printMancoFoilBtn').addEventListener('click', () => {
   const set = lorcastSets.find(s => s.code === currentSetCode);
   const rows = currentSetCards
     .filter(k => {
+      if (!versieBeschikbaar(k, 'Foil')) return false; // deze kaart heeft helemaal geen foil-versie
       const ex = exemplarenByParent[k.id] || {};
       const heeftNormaal = ex.Normaal && ex.Normaal.aantal > 0;
       const heeftFoil = ex.Foil && ex.Foil.aantal > 0;
