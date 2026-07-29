@@ -52,7 +52,7 @@
   .gauge-label { font-weight: 700; color: #2c3e50; margin-top: -4px; font-size: 13px; }
 
   .card-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
     gap: 12px; max-width: 1100px; margin: 0 auto;
   }
   .lc-card {
@@ -69,8 +69,31 @@
     font-size: 9.5px; font-weight: 700; color: white; border-radius: 5px; padding: 2px 6px;
     text-transform: uppercase; letter-spacing: 0.3px;
   }
-  .checks { display: flex; justify-content: center; gap: 10px; margin-top: 6px; font-size: 11.5px; }
-  .checks label { display: flex; align-items: center; gap: 3px; cursor: pointer; color: #444; }
+
+  .tile-versions { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .tile-version-row {
+    display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: #444;
+    background: #f7f9fa; border-radius: 6px; padding: 3px 5px;
+  }
+  .tile-version-row .tvr-chk { flex: none; }
+  .tile-version-row .tvr-label { flex: none; width: 36px; text-align: left; font-weight: 600; }
+  .tile-version-row .stepper.mini { display: flex; align-items: center; gap: 2px; flex: 1; justify-content: center; }
+  .stepper-btn.mini { width: 18px; height: 18px; font-size: 11px; }
+  .tile-version-row .tvr-price { flex: none; width: 38px; text-align: right; font-weight: 600; color: #2c3e50; }
+
+  .set-summary-row {
+    display: none; align-items: flex-start; justify-content: center; gap: 22px;
+    max-width: 700px; margin: 0 auto 16px; background: white; border-radius: 12px;
+    padding: 14px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .ssr-gauge { text-align: center; flex: none; }
+  .ssr-gauge .gauge-svg { width: 120px; }
+  .ssr-stats { flex: 1; min-width: 0; }
+  .ssr-line { display: flex; justify-content: space-between; font-size: 13.5px; color: #2c3e50; margin-bottom: 4px; }
+  .ssr-top3 { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ddd; }
+  .ssr-top3-item { font-size: 12.5px; color: #444; margin-bottom: 2px; }
+  .ssr-top3-item span { color: #888; }
+  .ssr-top3-item.empty { color: #999; font-style: italic; }
 
   .ink-Amber { background: #d99a1f; }
   .ink-Amethyst { background: #9b59b6; }
@@ -174,13 +197,24 @@
       <option value="naam">Sorteer: naam</option>
     </select>
   </div>
-  <div id="gaugeWrapSets" style="display:none;">
-    <svg class="gauge-svg" viewBox="0 0 200 110">
-      <path d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#e5e9ec" stroke-width="16" stroke-linecap="round"/>
-      <path id="setGaugeArc" d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#3ecf8e" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
-      <text id="setGaugePct" class="gauge-pct" x="100" y="90" text-anchor="middle">0%</text>
-    </svg>
-    <div id="setGaugeLabel" class="gauge-label">0 / 0</div>
+  <div class="toolbar">
+    <button id="printMancoAllBtn" class="secondary">🖨️ Mancolijst: helemaal niet in bezit</button>
+    <button id="printMancoFoilBtn" class="secondary">🖨️ Mancolijst: nog geen foil</button>
+  </div>
+  <div id="setSummaryRow" class="set-summary-row">
+    <div class="ssr-gauge">
+      <svg class="gauge-svg" viewBox="0 0 200 110">
+        <path d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#e5e9ec" stroke-width="16" stroke-linecap="round"/>
+        <path id="setGaugeArc" d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#3ecf8e" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+        <text id="setGaugePct" class="gauge-pct" x="100" y="90" text-anchor="middle">0%</text>
+      </svg>
+      <div id="setGaugeLabel" class="gauge-label">0 / 0</div>
+    </div>
+    <div class="ssr-stats">
+      <div class="ssr-line"><span>Waarde van deze set</span><b id="setValueLabel">$0.00</b></div>
+      <div class="ssr-line"><span>Totale collectiewaarde</span><b id="collValueLabel">$0.00</b></div>
+      <div class="ssr-top3" id="setTop3"></div>
+    </div>
   </div>
   <div id="setCardGrid" class="card-grid"></div>
   <div id="setEmptyMsg" class="empty-msg" style="display:none;">Nog geen kaarten opgehaald voor deze set. Klik op "Kaarten ophalen/verversen".</div>
@@ -382,7 +416,7 @@ async function loadSetTab() {
   if (!currentSetCards.length) {
     document.getElementById('setEmptyMsg').style.display = 'block';
     document.getElementById('setCardGrid').innerHTML = '';
-    document.getElementById('gaugeWrapSets').style.display = 'none';
+    document.getElementById('setSummaryRow').style.display = 'none';
     return;
   }
   document.getElementById('setEmptyMsg').style.display = 'none';
@@ -426,7 +460,7 @@ function renderSetGrid() {
 
   document.getElementById('setCardGrid').innerHTML = list.map(k => cardTileHtml(k)).join('');
   wireGridEvents();
-  updateGauge('set', currentSetCards.filter(k => isOwned(k.id)).length, currentSetCards.length);
+  renderSetSummary();
 }
 
 function isOwned(parentId) {
@@ -434,10 +468,25 @@ function isOwned(parentId) {
   return !!(ex && ((ex.Normaal && ex.Normaal.aantal > 0) || (ex.Foil && ex.Foil.aantal > 0)));
 }
 
-function cardTileHtml(k) {
+function versionRowHtml(k, versie) {
   const ex = exemplarenByParent[k.id] || {};
-  const normChecked = ex.Normaal && ex.Normaal.aantal > 0 ? 'checked' : '';
-  const foilChecked = ex.Foil && ex.Foil.aantal > 0 ? 'checked' : '';
+  const rec = ex[versie];
+  const aantal = rec ? rec.aantal : 0;
+  const prijs = versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+  return `
+    <div class="tile-version-row">
+      <input type="checkbox" class="tvr-chk" data-parent="${k.id}" data-versie="${versie}" ${aantal > 0 ? 'checked' : ''}>
+      <span class="tvr-label">${versie}</span>
+      <div class="stepper mini">
+        <button type="button" class="stepper-btn mini" data-parent="${k.id}" data-versie="${versie}" data-delta="-1">−</button>
+        <span class="stepper-val" data-tile-val="${k.id}|${versie}">${aantal}</span>
+        <button type="button" class="stepper-btn mini" data-parent="${k.id}" data-versie="${versie}" data-delta="1">+</button>
+      </div>
+      <span class="tvr-price">${prijs ? '$' + Number(prijs).toFixed(2) : '-'}</span>
+    </div>`;
+}
+
+function cardTileHtml(k) {
   return `
   <div class="lc-card ${isOwned(k.id) ? 'owned' : ''}" data-id="${k.id}">
     <img src="${k.afbeelding || ''}" loading="lazy" data-open="${k.id}">
@@ -445,9 +494,9 @@ function cardTileHtml(k) {
     <div class="name" data-open="${k.id}">${k.naam}</div>
     <div class="version">${k.versie || ''}</div>
     <div class="num">#${k.collector_number}</div>
-    <div class="checks">
-      <label><input type="checkbox" class="chk-normaal" data-parent="${k.id}" ${normChecked}> Normaal</label>
-      <label><input type="checkbox" class="chk-foil" data-parent="${k.id}" ${foilChecked}> Foil</label>
+    <div class="tile-versions">
+      ${versionRowHtml(k, 'Normaal')}
+      ${versionRowHtml(k, 'Foil')}
     </div>
   </div>`;
 }
@@ -456,30 +505,37 @@ function wireGridEvents() {
   document.querySelectorAll('[data-open]').forEach(el => {
     el.addEventListener('click', () => openDetail(el.dataset.open));
   });
-  document.querySelectorAll('.chk-normaal').forEach(el => {
-    el.addEventListener('change', () => toggleVersie(el.dataset.parent, 'Normaal', el.checked));
+  document.querySelectorAll('.tvr-chk').forEach(el => {
+    el.addEventListener('change', () => setAantal(el.dataset.parent, el.dataset.versie, el.checked ? 1 : 0));
   });
-  document.querySelectorAll('.chk-foil').forEach(el => {
-    el.addEventListener('change', () => toggleVersie(el.dataset.parent, 'Foil', el.checked));
+  document.querySelectorAll('.tile-version-row .stepper-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const valEl = document.querySelector(`[data-tile-val="${btn.dataset.parent}|${btn.dataset.versie}"]`);
+      const huidig = valEl ? (parseInt(valEl.textContent) || 0) : 0;
+      setAantal(btn.dataset.parent, btn.dataset.versie, huidig + parseInt(btn.dataset.delta));
+    });
   });
 }
 
-async function toggleVersie(parentId, versie, checked) {
-  const kaart = currentSetCards.find(k => k.id === parentId) ||
+/* ============================================================
+   AANTAL BIJWERKEN (gedeeld door tegels + detailvenster)
+   ============================================================ */
+async function setAantal(parentId, versie, nieuweWaarde) {
+  nieuweWaarde = Math.max(0, nieuweWaarde);
+  const kaart = currentSetCards.find(k => k.id === parentId) || currentDetailCard ||
     (topValueCache || []).find(k => k.id === parentId);
-  if (checked) {
-    const { data, error } = await sb.from('lorcana_exemplaren')
-      .upsert({ parent_id: parentId, set_code: kaart ? kaart.set_code : currentSetCode,
-                collector_number: kaart ? kaart.collector_number : '', versie, aantal: 1 },
-              { onConflict: 'parent_id,versie' })
-      .select().single();
-    if (!error && data) {
-      exemplarenByParent[parentId] = exemplarenByParent[parentId] || {};
-      exemplarenByParent[parentId][versie] = data;
-    }
-  } else {
+  if (nieuweWaarde === 0) {
     await sb.from('lorcana_exemplaren').delete().eq('parent_id', parentId).eq('versie', versie);
     if (exemplarenByParent[parentId]) delete exemplarenByParent[parentId][versie];
+  } else {
+    const { data, error } = await sb.from('lorcana_exemplaren')
+      .upsert({ parent_id: parentId, set_code: kaart ? kaart.set_code : currentSetCode,
+                collector_number: kaart ? kaart.collector_number : '', versie, aantal: nieuweWaarde },
+              { onConflict: 'parent_id,versie' })
+      .select().single();
+    if (error) { console.error(error); return; }
+    exemplarenByParent[parentId] = exemplarenByParent[parentId] || {};
+    exemplarenByParent[parentId][versie] = data;
   }
   renderSetGrid();
   if (currentDetailCard && currentDetailCard.id === parentId) openDetail(parentId);
@@ -495,7 +551,6 @@ document.getElementById('setSort').addEventListener('change', renderSetGrid);
 function updateGauge(scope, owned, total) {
   const pct = total ? Math.round((owned / total) * 100) : 0;
   if (scope === 'set') {
-    document.getElementById('gaugeWrapSets').style.display = 'block';
     document.getElementById('setGaugeLabel').textContent = `${owned} / ${total}`;
     document.getElementById('setGaugePct').textContent = pct + '%';
     document.getElementById('setGaugeArc').setAttribute('stroke-dasharray', `${pct} 100`);
@@ -504,6 +559,60 @@ function updateGauge(scope, owned, total) {
     document.getElementById('collGaugePct').textContent = pct + '%';
     document.getElementById('collGaugeArc').setAttribute('stroke-dasharray', `${pct} 100`);
   }
+}
+
+/* ============================================================
+   SET-SAMENVATTING: gauge + waarde + top 3 duurste (in bezit)
+   ============================================================ */
+async function computeCollectionTotalValue() {
+  const { data: exemplaren } = await sb.from('lorcana_exemplaren').select('parent_id,versie,aantal').gt('aantal', 0).range(0, 9999);
+  if (!exemplaren || !exemplaren.length) return 0;
+  const parentIds = [...new Set(exemplaren.map(e => e.parent_id))];
+  const { data: kaarten } = await sb.from('lorcana_set_kaarten').select('id,prijs_normaal,prijs_foil').in('id', parentIds).range(0, 9999);
+  const byId = {};
+  (kaarten || []).forEach(k => byId[k.id] = k);
+  let total = 0;
+  exemplaren.forEach(e => {
+    const k = byId[e.parent_id];
+    if (!k) return;
+    const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+    total += (prijs || 0) * e.aantal;
+  });
+  return total;
+}
+
+async function renderSetSummary() {
+  const wrap = document.getElementById('setSummaryRow');
+  if (!currentSetCards.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+
+  const owned = currentSetCards.filter(k => isOwned(k.id));
+  updateGauge('set', owned.length, currentSetCards.length);
+
+  let setValue = 0;
+  const entries = [];
+  currentSetCards.forEach(k => {
+    const ex = exemplarenByParent[k.id] || {};
+    if (ex.Normaal && ex.Normaal.aantal > 0) {
+      const p = k.prijs_normaal || 0;
+      setValue += p * ex.Normaal.aantal;
+      entries.push({ naam: k.naam, versie: 'Normaal', prijs: p });
+    }
+    if (ex.Foil && ex.Foil.aantal > 0) {
+      const p = k.prijs_foil || 0;
+      setValue += p * ex.Foil.aantal;
+      entries.push({ naam: k.naam, versie: 'Foil', prijs: p });
+    }
+  });
+  document.getElementById('setValueLabel').textContent = '$' + setValue.toFixed(2);
+
+  const top3 = entries.sort((a, b) => b.prijs - a.prijs).slice(0, 3);
+  document.getElementById('setTop3').innerHTML = top3.length
+    ? top3.map(t => `<div class="ssr-top3-item">${t.naam} <span>(${t.versie})</span> — $${t.prijs.toFixed(2)}</div>`).join('')
+    : '<div class="ssr-top3-item empty">Nog geen kaarten in bezit in deze set.</div>';
+
+  const collValue = await computeCollectionTotalValue();
+  document.getElementById('collValueLabel').textContent = '$' + collValue.toFixed(2);
 }
 
 /* ============================================================
@@ -556,32 +665,13 @@ async function openDetail(parentId) {
   }).join('');
 
   document.querySelectorAll('#mdVersionRows .stepper-btn').forEach(btn => {
-    btn.addEventListener('click', () => adjustAantal(parentId, btn.dataset.versie, parseInt(btn.dataset.delta)));
+    btn.addEventListener('click', () => {
+      const huidig = ex[btn.dataset.versie] ? ex[btn.dataset.versie].aantal : 0;
+      setAantal(parentId, btn.dataset.versie, huidig + parseInt(btn.dataset.delta));
+    });
   });
 
   document.getElementById('cardDetailModal').classList.add('open');
-}
-
-async function adjustAantal(parentId, versie, delta) {
-  const ex = exemplarenByParent[parentId] || {};
-  const huidig = ex[versie] ? ex[versie].aantal : 0;
-  const nieuw = Math.max(0, huidig + delta);
-  const kaart = currentSetCards.find(k => k.id === parentId) || currentDetailCard;
-
-  if (nieuw === 0) {
-    await sb.from('lorcana_exemplaren').delete().eq('parent_id', parentId).eq('versie', versie);
-    if (exemplarenByParent[parentId]) delete exemplarenByParent[parentId][versie];
-  } else {
-    const { data } = await sb.from('lorcana_exemplaren')
-      .upsert({ parent_id: parentId, set_code: kaart ? kaart.set_code : currentSetCode,
-                collector_number: kaart ? kaart.collector_number : '', versie, aantal: nieuw },
-              { onConflict: 'parent_id,versie' })
-      .select().single();
-    exemplarenByParent[parentId] = exemplarenByParent[parentId] || {};
-    exemplarenByParent[parentId][versie] = data;
-  }
-  document.querySelector(`[data-versie-val="${versie}"]`).textContent = nieuw;
-  renderSetGrid();
 }
 
 document.getElementById('modalCloseBtn').addEventListener('click', () => {
@@ -673,35 +763,115 @@ document.getElementById('bulkStartBtn').addEventListener('click', async () => {
    ============================================================ */
 let topValueCache = [];
 document.getElementById('topValueBtn').addEventListener('click', async () => {
-  if (!sb) return;
+  if (!sb) return alert('Configureer eerst Supabase (zie banner bovenaan).');
   const list = document.getElementById('topValueList');
-  const isOpen = list.style.display !== 'none';
-  if (isOpen) { list.style.display = 'none'; return; }
 
-  const { data: exemplaren } = await sb.from('lorcana_exemplaren').select('*').gt('aantal', 0).range(0, 9999);
-  const parentIds = [...new Set((exemplaren || []).map(e => e.parent_id))];
-  if (!parentIds.length) { list.innerHTML = '<div class="empty-msg">Nog geen kaarten in bezit.</div>'; list.style.display = 'grid'; return; }
+  if (list.classList.contains('open')) {
+    list.classList.remove('open');
+    list.style.display = 'none';
+    return;
+  }
 
-  const { data: kaarten } = await sb.from('lorcana_set_kaarten').select('*').in('id', parentIds).range(0, 9999);
-  topValueCache = kaarten || [];
-  const byId = {}; topValueCache.forEach(k => byId[k.id] = k);
+  try {
+    const { data: exemplaren, error: errEx } = await sb.from('lorcana_exemplaren').select('*').gt('aantal', 0).range(0, 9999);
+    if (errEx) throw errEx;
+    const parentIds = [...new Set((exemplaren || []).map(e => e.parent_id))];
+    if (!parentIds.length) {
+      list.innerHTML = '<div class="empty-msg">Nog geen kaarten in bezit.</div>';
+      list.style.display = 'grid';
+      list.classList.add('open');
+      return;
+    }
 
-  const rows = (exemplaren || []).map(e => {
-    const k = byId[e.parent_id];
-    if (!k) return null;
-    const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
-    return { k, versie: e.versie, prijs: prijs || 0 };
-  }).filter(Boolean).sort((a, b) => b.prijs - a.prijs).slice(0, 30);
+    const { data: kaarten, error: errKrt } = await sb.from('lorcana_set_kaarten').select('*').in('id', parentIds).range(0, 9999);
+    if (errKrt) throw errKrt;
+    topValueCache = kaarten || [];
+    const byId = {}; topValueCache.forEach(k => byId[k.id] = k);
 
-  list.innerHTML = rows.map(r => `
-    <div class="lc-card owned">
-      <img src="${r.k.afbeelding || ''}">
-      <div class="badges">${inkBadge(r.k.ink)}${rarityBadge(r.k.rarity)}</div>
-      <div class="name">${r.k.naam}</div>
-      <div class="version">${r.versie} — $${r.prijs.toFixed(2)}</div>
-      <div class="num">#${r.k.collector_number} · ${r.k.set_naam}</div>
-    </div>`).join('');
-  list.style.display = 'grid';
+    const rows = (exemplaren || []).map(e => {
+      const k = byId[e.parent_id];
+      if (!k) return null;
+      const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+      return { k, versie: e.versie, prijs: prijs || 0 };
+    }).filter(Boolean).sort((a, b) => b.prijs - a.prijs).slice(0, 30);
+
+    list.innerHTML = rows.length ? rows.map(r => `
+      <div class="lc-card owned">
+        <img src="${r.k.afbeelding || ''}">
+        <div class="badges">${inkBadge(r.k.ink)}${rarityBadge(r.k.rarity)}</div>
+        <div class="name">${r.k.naam}</div>
+        <div class="version">${r.versie} — $${r.prijs.toFixed(2)}</div>
+        <div class="num">#${r.k.collector_number} · ${r.k.set_naam}</div>
+      </div>`).join('') : '<div class="empty-msg">Geen prijsinformatie beschikbaar voor je kaarten.</div>';
+    list.style.display = 'grid';
+    list.classList.add('open');
+  } catch (err) {
+    console.error(err);
+    alert('Kon topwaarde niet laden: ' + (err && err.message ? err.message : err));
+  }
+});
+
+/* ============================================================
+   MANCOLIJSTEN (print, per set)
+   ============================================================ */
+function openPrintWindow(title, rows) {
+  const win = window.open('', '_blank');
+  if (!win) { alert('Kon geen nieuw venster openen (pop-upblokkering?).'); return; }
+  const rowsHtml = rows.length
+    ? rows.map(r => `<div class="row"><input type="checkbox" class="chk"><span class="num">#${r.num}</span><span class="naam">${r.naam}</span><span class="prijs">${r.prijs}</span></div>`).join('')
+    : '<div class="row">Niets te printen — deze lijst is leeg.</div>';
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;margin:14mm;color:#222;}
+    h1{font-size:15px;margin:0 0 10px;}
+    .list{columns:3;column-gap:16px;}
+    .row{display:flex;align-items:center;gap:5px;padding:2px 0;border-bottom:1px dotted #ccc;break-inside:avoid;}
+    .row .chk{width:11px;height:11px;flex:none;}
+    .row .num{width:26px;color:#888;flex:none;}
+    .row .naam{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .row .prijs{width:42px;text-align:right;flex:none;}
+    .printbar{margin-bottom:10px;}
+    .printbar button{padding:8px 14px;border-radius:6px;border:none;background:#457b9d;color:white;font-weight:600;cursor:pointer;}
+    @media print { .printbar{display:none;} @page{size:A4;margin:12mm;} }
+  </style></head><body>
+  <div class="printbar"><button onclick="window.print()">Print</button></div>
+  <h1>${title}</h1>
+  <div class="list">${rowsHtml}</div>
+  </body></html>`);
+  win.document.close();
+}
+
+document.getElementById('printMancoAllBtn').addEventListener('click', () => {
+  if (!currentSetCards.length) return alert('Haal eerst de kaarten van deze set op.');
+  const set = lorcastSets.find(s => s.code === currentSetCode);
+  const rows = currentSetCards
+    .filter(k => !isOwned(k.id))
+    .sort((a, b) => (parseInt(a.collector_number) || 0) - (parseInt(b.collector_number) || 0))
+    .map(k => ({
+      num: k.collector_number,
+      naam: k.naam + (k.versie ? ' — ' + k.versie : ''),
+      prijs: k.prijs_normaal ? '$' + Number(k.prijs_normaal).toFixed(2) : '-'
+    }));
+  openPrintWindow('Mancolijst — ' + (set ? set.name : currentSetCode) + ' (helemaal niet in bezit)', rows);
+});
+
+document.getElementById('printMancoFoilBtn').addEventListener('click', () => {
+  if (!currentSetCards.length) return alert('Haal eerst de kaarten van deze set op.');
+  const set = lorcastSets.find(s => s.code === currentSetCode);
+  const rows = currentSetCards
+    .filter(k => {
+      const ex = exemplarenByParent[k.id] || {};
+      const heeftNormaal = ex.Normaal && ex.Normaal.aantal > 0;
+      const heeftFoil = ex.Foil && ex.Foil.aantal > 0;
+      return heeftNormaal && !heeftFoil;
+    })
+    .sort((a, b) => (parseInt(a.collector_number) || 0) - (parseInt(b.collector_number) || 0))
+    .map(k => ({
+      num: k.collector_number,
+      naam: k.naam + (k.versie ? ' — ' + k.versie : ''),
+      prijs: k.prijs_foil ? '$' + Number(k.prijs_foil).toFixed(2) : '-'
+    }));
+  openPrintWindow('Mancolijst — ' + (set ? set.name : currentSetCode) + ' (nog geen foil)', rows);
 });
 
 /* ============================================================
