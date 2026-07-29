@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Lorcana Collectie (Supabase)</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -13,7 +14,8 @@
     margin: 0;
     padding: 16px;
   }
-  h1 { text-align: center; color: #2c3e50; margin: 6px 0 14px; font-size: 22px; }
+  h1 { text-align: center; color: #2c3e50; margin: 6px 0 2px; font-size: 22px; }
+  #appVersion { text-align: center; color: #999; font-size: 12px; margin: 0 0 14px; }
 
   #configBanner {
     display: none;
@@ -170,6 +172,7 @@
 <body>
 
 <h1>🧊 Lorcana Collectie</h1>
+<div id="appVersion"></div>
 <div id="configBanner">
   Vul bovenaan in het bestand je Supabase-URL en anon key in (SUPABASE_URL / SUPABASE_KEY) voordat je de app gebruikt.
 </div>
@@ -267,6 +270,10 @@
 const SUPABASE_URL = "https://dckojtvyxqsgvcfgufpf.supabase.co";
 const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
+
+// Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
+const APP_VERSION = "v1.1";
+document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
 if (SUPABASE_URL.startsWith("http") && SUPABASE_KEY.length > 10) {
