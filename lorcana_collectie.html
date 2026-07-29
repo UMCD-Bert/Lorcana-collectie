@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Lorcana Collectie (Supabase)</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #eef1f4;
+    margin: 0;
+    padding: 16px;
+  }
+  h1 { text-align: center; color: #2c3e50; margin: 6px 0 14px; font-size: 22px; }
+
+  #configBanner {
+    display: none;
+    background: #fff3cd; border: 1px solid #ffe08a; color: #6b5300;
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; text-align: center;
+  }
+
+  .tabs { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+  .tab-btn {
+    padding: 9px 18px; border: none; border-radius: 20px; font-weight: 700; font-size: 14px;
+    background: #dfe6ea; color: #2c3e50; cursor: pointer;
+  }
+  .tab-btn.active { background: #3ecf8e; color: white; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+    gap: 8px; margin-bottom: 12px;
+  }
+  select, input[type="text"] {
+    padding: 9px 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px;
+  }
+  input[type="text"] { width: 220px; max-width: 60vw; }
+  button {
+    padding: 9px 14px; border-radius: 8px; border: none; font-weight: 600; font-size: 13px;
+    cursor: pointer; color: white; background: #457b9d;
+  }
+  button.secondary { background: #6c757d; }
+  button.accent { background: #3ecf8e; }
+  button:disabled { opacity: 0.55; cursor: default; }
+
+  #gaugeWrapSets, #gaugeWrapCollectie { text-align: center; margin: 8px 0 14px; }
+  .gauge-svg { width: 160px; }
+  .gauge-pct { font-size: 20px; font-weight: 800; fill: #2c3e50; }
+  .gauge-label { font-weight: 700; color: #2c3e50; margin-top: -4px; font-size: 13px; }
+
+  .card-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px; max-width: 1100px; margin: 0 auto;
+  }
+  .lc-card {
+    background: white; border-radius: 12px; padding: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    text-align: center; position: relative;
+  }
+  .lc-card.owned { box-shadow: 0 0 0 2px #3ecf8e, 0 1px 4px rgba(0,0,0,0.12); }
+  .lc-card img { width: 100%; border-radius: 8px; cursor: pointer; display: block; background: #f1f3f5; }
+  .lc-card .num { font-size: 11px; color: #888; margin-top: 4px; }
+  .lc-card .name { font-size: 12.5px; font-weight: 700; color: #2c3e50; margin-top: 2px; line-height: 1.25; cursor: pointer; }
+  .lc-card .version { font-size: 11px; color: #777; margin-top: 1px; }
+  .badges { display: flex; justify-content: center; gap: 4px; margin: 4px 0; flex-wrap: wrap; }
+  .badge {
+    font-size: 9.5px; font-weight: 700; color: white; border-radius: 5px; padding: 2px 6px;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .checks { display: flex; justify-content: center; gap: 10px; margin-top: 6px; font-size: 11.5px; }
+  .checks label { display: flex; align-items: center; gap: 3px; cursor: pointer; color: #444; }
+
+  .ink-Amber { background: #d99a1f; }
+  .ink-Amethyst { background: #9b59b6; }
+  .ink-Emerald { background: #27ae60; }
+  .ink-Ruby { background: #e74c3c; }
+  .ink-Sapphire { background: #3498db; }
+  .ink-Steel { background: #7f8c96; }
+  .rar-Common { background: #7f8c8d; }
+  .rar-Uncommon { background: #2e8b57; }
+  .rar-Rare { background: #2980b9; }
+  .rar-Super_rare { background: #8e44ad; }
+  .rar-Legendary { background: #d4870f; }
+  .rar-Enchanted { background: #c2185b; }
+  .rar-Promo { background: #34495e; }
+
+  .set-progress-row {
+    max-width: 700px; margin: 0 auto 8px; background: white; border-radius: 10px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer;
+  }
+  .set-progress-row .spr-name { flex: 1; font-weight: 700; color: #2c3e50; font-size: 14px; }
+  .set-progress-row .spr-count { font-size: 12.5px; color: #666; width: 64px; text-align: right; }
+  .spr-bar-track { flex: 2; height: 8px; border-radius: 5px; background: #eef1f4; overflow: hidden; }
+  .spr-bar-fill { height: 100%; background: #3ecf8e; }
+
+  #bulkPanel {
+    max-width: 700px; margin: 0 auto 16px; background: white; border-radius: 10px; padding: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  #bulkProgressWrap { margin-top: 10px; display: none; }
+  #bulkBarTrack { width: 100%; height: 10px; border-radius: 6px; background: #eef1f4; overflow: hidden; margin-bottom: 6px; }
+  #bulkBarFill { height: 100%; border-radius: 6px; background: #3ecf8e; width: 0%; transition: width 0.2s ease; }
+  #bulkStatusText { font-size: 12px; color: #444; }
+  #bulkLog { max-height: 160px; overflow-y: auto; font-size: 11.5px; margin-top: 8px; }
+  #bulkLog .ok { color: #2e8b57; }
+  #bulkLog .fail { color: #c0392b; }
+
+  .modal {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    align-items: flex-start; justify-content: center; overflow-y: auto; z-index: 100; padding: 24px 12px;
+  }
+  .modal.open { display: flex; }
+  .modal-box {
+    background: white; border-radius: 14px; padding: 18px; max-width: 420px; width: 100%;
+    position: relative;
+  }
+  .modal-close {
+    position: absolute; top: 8px; right: 10px; background: none; border: none; color: #888;
+    font-size: 20px; cursor: pointer; padding: 2px 6px;
+  }
+  .modal-box img { width: 60%; display: block; margin: 0 auto 10px; border-radius: 10px; }
+  .modal-box h2 { text-align: center; margin: 0 0 2px; color: #2c3e50; font-size: 18px; }
+  .modal-box .mv { text-align: center; color: #777; font-size: 13px; margin-bottom: 8px; }
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center;
+    font-size: 12px; color: #444; margin: 10px 0; background: #f7f9fa; border-radius: 8px; padding: 8px;
+  }
+  .stat-grid div b { display: block; color: #2c3e50; font-size: 14px; }
+  .price-row { display: flex; justify-content: space-between; font-size: 13px; margin: 4px 0; }
+  .version-row {
+    display: flex; align-items: center; justify-content: space-between; background: #f7f9fa;
+    border-radius: 8px; padding: 8px 10px; margin-top: 8px;
+  }
+  .version-row .vname { font-weight: 600; color: #2c3e50; font-size: 13.5px; }
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper-btn {
+    width: 26px; height: 26px; border-radius: 50%; border: 1px solid #ccc; background: white;
+    color: #2c3e50; font-size: 15px; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .stepper-val { min-width: 18px; text-align: center; font-weight: 700; }
+  .text-flavor { font-size: 12px; color: #666; font-style: italic; margin-top: 10px; text-align: center; }
+  .empty-msg { text-align: center; color: #888; font-size: 14px; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>🧊 Lorcana Collectie</h1>
+<div id="configBanner">
+  Vul bovenaan in het bestand je Supabase-URL en anon key in (SUPABASE_URL / SUPABASE_KEY) voordat je de app gebruikt.
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="sets">Sets</button>
+  <button class="tab-btn" data-tab="collectie">Collectie</button>
+</div>
+
+<!-- ===== TAB: SETS ===== -->
+<div id="tab-sets" class="tab-panel active">
+  <div class="toolbar">
+    <select id="setSelect"></select>
+    <button id="fetchSetBtn" class="accent">⬇️ Kaarten ophalen/verversen</button>
+  </div>
+  <div class="toolbar">
+    <input type="text" id="setSearch" placeholder="Zoek op naam of nummer...">
+    <select id="setFilter">
+      <option value="alle">Alle</option>
+      <option value="bezit">In bezit</option>
+      <option value="ontbrekend">Ontbrekend</option>
+    </select>
+    <select id="setSort">
+      <option value="nummer">Sorteer: nummer</option>
+      <option value="naam">Sorteer: naam</option>
+    </select>
+  </div>
+  <div id="gaugeWrapSets" style="display:none;">
+    <svg class="gauge-svg" viewBox="0 0 200 110">
+      <path d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#e5e9ec" stroke-width="16" stroke-linecap="round"/>
+      <path id="setGaugeArc" d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#3ecf8e" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+      <text id="setGaugePct" class="gauge-pct" x="100" y="90" text-anchor="middle">0%</text>
+    </svg>
+    <div id="setGaugeLabel" class="gauge-label">0 / 0</div>
+  </div>
+  <div id="setCardGrid" class="card-grid"></div>
+  <div id="setEmptyMsg" class="empty-msg" style="display:none;">Nog geen kaarten opgehaald voor deze set. Klik op "Kaarten ophalen/verversen".</div>
+</div>
+
+<!-- ===== TAB: COLLECTIE ===== -->
+<div id="tab-collectie" class="tab-panel">
+  <div id="gaugeWrapCollectie" style="text-align:center;">
+    <svg class="gauge-svg" viewBox="0 0 200 110">
+      <path d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#e5e9ec" stroke-width="16" stroke-linecap="round"/>
+      <path id="collGaugeArc" d="M 15 100 A 85 85 0 0 1 185 100" fill="none" stroke="#3ecf8e" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100"/>
+      <text id="collGaugePct" class="gauge-pct" x="100" y="90" text-anchor="middle">0%</text>
+    </svg>
+    <div id="collGaugeLabel" class="gauge-label">0 / 0</div>
+  </div>
+
+  <div id="bulkPanel">
+    <button id="bulkStartBtn">🔄 Alle sets ophalen (Lorcast)</button>
+    <button id="topValueBtn" class="secondary">💰 Topwaarde van je collectie</button>
+    <div id="bulkProgressWrap">
+      <div id="bulkBarTrack"><div id="bulkBarFill"></div></div>
+      <div id="bulkStatusText"></div>
+    </div>
+    <div id="bulkLog"></div>
+  </div>
+
+  <div id="setProgressList"></div>
+  <div id="topValueList" class="card-grid" style="display:none;"></div>
+</div>
+
+<!-- ===== DETAIL MODAL ===== -->
+<div id="cardDetailModal" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" id="modalCloseBtn">✕</button>
+    <img id="mdImg" src="" alt="">
+    <h2 id="mdName"></h2>
+    <div class="mv" id="mdVersion"></div>
+    <div class="badges" id="mdBadges"></div>
+    <div class="stat-grid" id="mdStats"></div>
+    <div id="mdPrices"></div>
+    <div id="mdVersionRows"></div>
+    <div class="text-flavor" id="mdFlavor"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — vul in voordat je de app gebruikt
+   ============================================================ */
+const SUPABASE_URL = "https://dckojtvyxqsgvcfgufpf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
+const LORCAST_BASE = "https://api.lorcast.com/v0";
+
+let sb = null;
+if (SUPABASE_URL.startsWith("http") && SUPABASE_KEY.length > 10) {
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+} else {
+  document.getElementById('configBanner').style.display = 'block';
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let lorcastSets = [];          // [{id, name, code, released_at}]
+let currentSetCode = null;
+let currentSetCards = [];      // rows from lorcana_set_kaarten for huidige set
+let exemplarenByParent = {};   // parentId -> { Normaal: {id, aantal}, Foil: {id, aantal} }
+let currentDetailCard = null;
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function lorcastFetch(path) {
+  const res = await fetch(LORCAST_BASE + path);
+  if (!res.ok) throw new Error('Lorcast ' + res.status + ' ' + path);
+  return res.json();
+}
+
+function cardmarketSearchUrl(naam, versie) {
+  const q = [naam, versie].filter(Boolean).join(' ');
+  return 'https://www.cardmarket.com/en/Lorcana/Products/Search?searchString=' + encodeURIComponent(q);
+}
+
+function inkBadge(ink) {
+  return ink ? `<span class="badge ink-${ink}">${ink}</span>` : '';
+}
+function rarityBadge(rarity) {
+  return rarity ? `<span class="badge rar-${rarity}">${rarity.replace('_',' ')}</span>` : '';
+}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'collectie') renderCollectieTab();
+  });
+});
+
+/* ============================================================
+   SETS: laden van Lorcast (met localStorage cache, 24u)
+   ============================================================ */
+async function loadLorcastSets() {
+  const cacheRaw = localStorage.getItem('lorcana_sets_cache');
+  if (cacheRaw) {
+    const cache = JSON.parse(cacheRaw);
+    if (Date.now() - cache.ts < 24 * 3600 * 1000) {
+      lorcastSets = cache.sets;
+      populateSetSelect();
+      return;
+    }
+  }
+  try {
+    const data = await lorcastFetch('/sets');
+    lorcastSets = data.results.sort((a, b) => (a.released_at || '').localeCompare(b.released_at || ''));
+    localStorage.setItem('lorcana_sets_cache', JSON.stringify({ ts: Date.now(), sets: lorcastSets }));
+  } catch (e) {
+    console.error(e);
+  }
+  populateSetSelect();
+}
+
+function populateSetSelect() {
+  const sel = document.getElementById('setSelect');
+  sel.innerHTML = lorcastSets.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('');
+  if (lorcastSets.length) {
+    currentSetCode = sel.value;
+    loadSetTab();
+  }
+}
+
+document.getElementById('setSelect').addEventListener('change', (e) => {
+  currentSetCode = e.target.value;
+  loadSetTab();
+});
+
+/* ============================================================
+   SETS TAB: kaarten ophalen/verversen (van Lorcast naar Supabase)
+   ============================================================ */
+document.getElementById('fetchSetBtn').addEventListener('click', async () => {
+  if (!sb) return alert('Configureer eerst Supabase (zie banner bovenaan).');
+  const btn = document.getElementById('fetchSetBtn');
+  btn.disabled = true; btn.textContent = 'Bezig...';
+  try {
+    await fetchAndStoreSetCards(currentSetCode);
+    await loadSetTab();
+  } catch (e) {
+    alert('Ophalen mislukt: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '⬇️ Kaarten ophalen/verversen';
+});
+
+async function fetchAndStoreSetCards(setCode) {
+  const setInfo = lorcastSets.find(s => s.code === setCode);
+  const cards = await lorcastFetch('/sets/' + encodeURIComponent(setCode) + '/cards');
+  const rows = cards.map(c => ({
+    lorcast_id: c.id,
+    set_code: setCode,
+    set_naam: setInfo ? setInfo.name : c.set.name,
+    collector_number: c.collector_number,
+    naam: c.name,
+    versie: c.version || null,
+    ink: c.ink,
+    rarity: c.rarity,
+    type: (c.type || []).join(', '),
+    kosten: c.cost,
+    sterkte: c.strength,
+    wilskracht: c.willpower,
+    lore: c.lore,
+    afbeelding: c.image_uris && c.image_uris.digital ? c.image_uris.digital.normal : null,
+    prijs_normaal: c.prices ? (c.prices.usd ? Number(c.prices.usd) : null) : null,
+    prijs_foil: c.prices ? (c.prices.usd_foil ? Number(c.prices.usd_foil) : null) : null,
+    prijs_updated: new Date().toISOString(),
+    flavor_text: c.flavor_text || null,
+  }));
+  const { error } = await sb.from('lorcana_set_kaarten').upsert(rows, { onConflict: 'lorcast_id' });
+  if (error) throw error;
+}
+
+/* ============================================================
+   SETS TAB: data laden + renderen
+   ============================================================ */
+async function loadSetTab() {
+  if (!sb || !currentSetCode) return;
+  const { data: kaarten, error } = await sb
+    .from('lorcana_set_kaarten')
+    .select('*')
+    .eq('set_code', currentSetCode)
+    .range(0, 999);
+  if (error) { console.error(error); return; }
+  currentSetCards = kaarten || [];
+
+  if (!currentSetCards.length) {
+    document.getElementById('setEmptyMsg').style.display = 'block';
+    document.getElementById('setCardGrid').innerHTML = '';
+    document.getElementById('gaugeWrapSets').style.display = 'none';
+    return;
+  }
+  document.getElementById('setEmptyMsg').style.display = 'none';
+
+  const parentIds = currentSetCards.map(k => k.id);
+  const { data: exemplaren } = await sb
+    .from('lorcana_exemplaren')
+    .select('*')
+    .in('parent_id', parentIds)
+    .range(0, 1999);
+
+  exemplarenByParent = {};
+  (exemplaren || []).forEach(ex => {
+    exemplarenByParent[ex.parent_id] = exemplarenByParent[ex.parent_id] || {};
+    exemplarenByParent[ex.parent_id][ex.versie] = ex;
+  });
+
+  renderSetGrid();
+}
+
+function renderSetGrid() {
+  const search = document.getElementById('setSearch').value.trim().toLowerCase();
+  const filter = document.getElementById('setFilter').value;
+  const sort = document.getElementById('setSort').value;
+
+  let list = currentSetCards.filter(k => {
+    if (search) {
+      const hay = (k.naam + ' ' + (k.versie || '') + ' ' + k.collector_number).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    const owned = isOwned(k.id);
+    if (filter === 'bezit' && !owned) return false;
+    if (filter === 'ontbrekend' && owned) return false;
+    return true;
+  });
+
+  list.sort((a, b) => {
+    if (sort === 'naam') return a.naam.localeCompare(b.naam);
+    return (parseInt(a.collector_number) || 0) - (parseInt(b.collector_number) || 0);
+  });
+
+  document.getElementById('setCardGrid').innerHTML = list.map(k => cardTileHtml(k)).join('');
+  wireGridEvents();
+  updateGauge('set', currentSetCards.filter(k => isOwned(k.id)).length, currentSetCards.length);
+}
+
+function isOwned(parentId) {
+  const ex = exemplarenByParent[parentId];
+  return !!(ex && ((ex.Normaal && ex.Normaal.aantal > 0) || (ex.Foil && ex.Foil.aantal > 0)));
+}
+
+function cardTileHtml(k) {
+  const ex = exemplarenByParent[k.id] || {};
+  const normChecked = ex.Normaal && ex.Normaal.aantal > 0 ? 'checked' : '';
+  const foilChecked = ex.Foil && ex.Foil.aantal > 0 ? 'checked' : '';
+  return `
+  <div class="lc-card ${isOwned(k.id) ? 'owned' : ''}" data-id="${k.id}">
+    <img src="${k.afbeelding || ''}" loading="lazy" data-open="${k.id}">
+    <div class="badges">${inkBadge(k.ink)}${rarityBadge(k.rarity)}</div>
+    <div class="name" data-open="${k.id}">${k.naam}</div>
+    <div class="version">${k.versie || ''}</div>
+    <div class="num">#${k.collector_number}</div>
+    <div class="checks">
+      <label><input type="checkbox" class="chk-normaal" data-parent="${k.id}" ${normChecked}> Normaal</label>
+      <label><input type="checkbox" class="chk-foil" data-parent="${k.id}" ${foilChecked}> Foil</label>
+    </div>
+  </div>`;
+}
+
+function wireGridEvents() {
+  document.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', () => openDetail(el.dataset.open));
+  });
+  document.querySelectorAll('.chk-normaal').forEach(el => {
+    el.addEventListener('change', () => toggleVersie(el.dataset.parent, 'Normaal', el.checked));
+  });
+  document.querySelectorAll('.chk-foil').forEach(el => {
+    el.addEventListener('change', () => toggleVersie(el.dataset.parent, 'Foil', el.checked));
+  });
+}
+
+async function toggleVersie(parentId, versie, checked) {
+  const kaart = currentSetCards.find(k => k.id === parentId) ||
+    (topValueCache || []).find(k => k.id === parentId);
+  if (checked) {
+    const { data, error } = await sb.from('lorcana_exemplaren')
+      .upsert({ parent_id: parentId, set_code: kaart ? kaart.set_code : currentSetCode,
+                collector_number: kaart ? kaart.collector_number : '', versie, aantal: 1 },
+              { onConflict: 'parent_id,versie' })
+      .select().single();
+    if (!error && data) {
+      exemplarenByParent[parentId] = exemplarenByParent[parentId] || {};
+      exemplarenByParent[parentId][versie] = data;
+    }
+  } else {
+    await sb.from('lorcana_exemplaren').delete().eq('parent_id', parentId).eq('versie', versie);
+    if (exemplarenByParent[parentId]) delete exemplarenByParent[parentId][versie];
+  }
+  renderSetGrid();
+  if (currentDetailCard && currentDetailCard.id === parentId) openDetail(parentId);
+}
+
+document.getElementById('setSearch').addEventListener('input', renderSetGrid);
+document.getElementById('setFilter').addEventListener('change', renderSetGrid);
+document.getElementById('setSort').addEventListener('change', renderSetGrid);
+
+/* ============================================================
+   GAUGE
+   ============================================================ */
+function updateGauge(scope, owned, total) {
+  const pct = total ? Math.round((owned / total) * 100) : 0;
+  if (scope === 'set') {
+    document.getElementById('gaugeWrapSets').style.display = 'block';
+    document.getElementById('setGaugeLabel').textContent = `${owned} / ${total}`;
+    document.getElementById('setGaugePct').textContent = pct + '%';
+    document.getElementById('setGaugeArc').setAttribute('stroke-dasharray', `${pct} 100`);
+  } else {
+    document.getElementById('collGaugeLabel').textContent = `${owned} / ${total}`;
+    document.getElementById('collGaugePct').textContent = pct + '%';
+    document.getElementById('collGaugeArc').setAttribute('stroke-dasharray', `${pct} 100`);
+  }
+}
+
+/* ============================================================
+   DETAIL MODAL
+   ============================================================ */
+async function openDetail(parentId) {
+  let kaart = currentSetCards.find(k => k.id === parentId);
+  if (!kaart) {
+    const { data } = await sb.from('lorcana_set_kaarten').select('*').eq('id', parentId).single();
+    kaart = data;
+  }
+  if (!kaart) return;
+  currentDetailCard = kaart;
+
+  document.getElementById('mdImg').src = kaart.afbeelding || '';
+  document.getElementById('mdName').textContent = kaart.naam;
+  document.getElementById('mdVersion').textContent = kaart.versie || '';
+  document.getElementById('mdBadges').innerHTML = inkBadge(kaart.ink) + rarityBadge(kaart.rarity) +
+    (kaart.type ? `<span class="badge" style="background:#607d8b;">${kaart.type}</span>` : '');
+  document.getElementById('mdStats').innerHTML = `
+    <div>Kosten<b>${kaart.kosten ?? '-'}</b></div>
+    <div>Kracht<b>${kaart.sterkte ?? '-'}</b></div>
+    <div>Wil<b>${kaart.wilskracht ?? '-'}</b></div>
+    <div>Lore<b>${kaart.lore ?? '-'}</b></div>`;
+  const updated = kaart.prijs_updated ? new Date(kaart.prijs_updated).toLocaleDateString('nl-NL') : '-';
+  document.getElementById('mdPrices').innerHTML = `
+    <div class="price-row"><span>Prijs (normaal)</span><span>${kaart.prijs_normaal ? '$' + kaart.prijs_normaal.toFixed(2) : '-'}</span></div>
+    <div class="price-row"><span>Prijs (foil)</span><span>${kaart.prijs_foil ? '$' + kaart.prijs_foil.toFixed(2) : '-'}</span></div>
+    <div style="font-size:11px;color:#999;text-align:right;">bijgewerkt: ${updated} (TCGplayer, USD)</div>
+    <div style="text-align:center;margin-top:6px;">
+      <a href="${cardmarketSearchUrl(kaart.naam, kaart.versie)}" target="_blank" rel="noopener"
+         style="font-size:12.5px;color:#457b9d;text-decoration:none;font-weight:600;">
+        🔎 Bekijk EUR-prijs op Cardmarket ↗
+      </a>
+    </div>`;
+  document.getElementById('mdFlavor').textContent = kaart.flavor_text || '';
+
+  const ex = exemplarenByParent[parentId] || {};
+  document.getElementById('mdVersionRows').innerHTML = ['Normaal', 'Foil'].map(v => {
+    const aantal = ex[v] ? ex[v].aantal : 0;
+    return `
+    <div class="version-row">
+      <span class="vname">${v}</span>
+      <div class="stepper">
+        <button class="stepper-btn" data-versie="${v}" data-delta="-1">−</button>
+        <span class="stepper-val" data-versie-val="${v}">${aantal}</span>
+        <button class="stepper-btn" data-versie="${v}" data-delta="1">+</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('#mdVersionRows .stepper-btn').forEach(btn => {
+    btn.addEventListener('click', () => adjustAantal(parentId, btn.dataset.versie, parseInt(btn.dataset.delta)));
+  });
+
+  document.getElementById('cardDetailModal').classList.add('open');
+}
+
+async function adjustAantal(parentId, versie, delta) {
+  const ex = exemplarenByParent[parentId] || {};
+  const huidig = ex[versie] ? ex[versie].aantal : 0;
+  const nieuw = Math.max(0, huidig + delta);
+  const kaart = currentSetCards.find(k => k.id === parentId) || currentDetailCard;
+
+  if (nieuw === 0) {
+    await sb.from('lorcana_exemplaren').delete().eq('parent_id', parentId).eq('versie', versie);
+    if (exemplarenByParent[parentId]) delete exemplarenByParent[parentId][versie];
+  } else {
+    const { data } = await sb.from('lorcana_exemplaren')
+      .upsert({ parent_id: parentId, set_code: kaart ? kaart.set_code : currentSetCode,
+                collector_number: kaart ? kaart.collector_number : '', versie, aantal: nieuw },
+              { onConflict: 'parent_id,versie' })
+      .select().single();
+    exemplarenByParent[parentId] = exemplarenByParent[parentId] || {};
+    exemplarenByParent[parentId][versie] = data;
+  }
+  document.querySelector(`[data-versie-val="${versie}"]`).textContent = nieuw;
+  renderSetGrid();
+}
+
+document.getElementById('modalCloseBtn').addEventListener('click', () => {
+  document.getElementById('cardDetailModal').classList.remove('open');
+});
+document.getElementById('cardDetailModal').addEventListener('click', (e) => {
+  if (e.target.id === 'cardDetailModal') e.target.classList.remove('open');
+});
+
+/* ============================================================
+   COLLECTIE TAB
+   ============================================================ */
+async function renderCollectieTab() {
+  if (!sb) return;
+  const { data: kaarten } = await sb.from('lorcana_set_kaarten').select('id,set_code,set_naam').range(0, 9999);
+  const { data: exemplaren } = await sb.from('lorcana_exemplaren').select('parent_id,versie,aantal').range(0, 9999);
+
+  const ownedParents = new Set((exemplaren || []).filter(e => e.aantal > 0).map(e => e.parent_id));
+  const perSet = {};
+  (kaarten || []).forEach(k => {
+    perSet[k.set_code] = perSet[k.set_code] || { naam: k.set_naam, total: 0, owned: 0 };
+    perSet[k.set_code].total++;
+    if (ownedParents.has(k.id)) perSet[k.set_code].owned++;
+  });
+
+  const totalCards = (kaarten || []).length;
+  const ownedCards = ownedParents.size;
+  updateGauge('coll', ownedCards, totalCards);
+
+  document.getElementById('setProgressList').innerHTML = Object.entries(perSet).map(([code, s]) => {
+    const pct = s.total ? Math.round((s.owned / s.total) * 100) : 0;
+    return `
+    <div class="set-progress-row" data-set="${code}">
+      <div class="spr-name">${s.naam}</div>
+      <div class="spr-bar-track"><div class="spr-bar-fill" style="width:${pct}%"></div></div>
+      <div class="spr-count">${s.owned}/${s.total}</div>
+    </div>`;
+  }).join('') || '<div class="empty-msg">Nog geen sets opgehaald. Gebruik "Alle sets ophalen" hierboven.</div>';
+
+  document.querySelectorAll('.set-progress-row').forEach(row => {
+    row.addEventListener('click', () => {
+      document.getElementById('setSelect').value = row.dataset.set;
+      currentSetCode = row.dataset.set;
+      loadSetTab();
+      document.querySelector('.tab-btn[data-tab="sets"]').click();
+    });
+  });
+}
+
+/* ============================================================
+   BULK: alle sets ophalen
+   ============================================================ */
+document.getElementById('bulkStartBtn').addEventListener('click', async () => {
+  if (!sb) return alert('Configureer eerst Supabase.');
+  const btn = document.getElementById('bulkStartBtn');
+  btn.disabled = true;
+  const wrap = document.getElementById('bulkProgressWrap');
+  const bar = document.getElementById('bulkBarFill');
+  const status = document.getElementById('bulkStatusText');
+  const log = document.getElementById('bulkLog');
+  wrap.style.display = 'block';
+  log.innerHTML = '';
+
+  await loadLorcastSets();
+  const total = lorcastSets.length;
+  let done = 0;
+
+  for (const s of lorcastSets) {
+    status.textContent = `Bezig met ${s.name} (${done + 1}/${total})...`;
+    try {
+      await fetchAndStoreSetCards(s.code);
+      log.innerHTML += `<div class="ok">✔ ${s.name}</div>`;
+    } catch (e) {
+      log.innerHTML += `<div class="fail">✘ ${s.name}: ${e.message}</div>`;
+    }
+    done++;
+    bar.style.width = Math.round((done / total) * 100) + '%';
+    log.scrollTop = log.scrollHeight;
+    await sleep(120);
+  }
+  status.textContent = `Klaar: ${done}/${total} sets verwerkt.`;
+  btn.disabled = false;
+  await renderCollectieTab();
+  if (currentSetCode) await loadSetTab();
+});
+
+/* ============================================================
+   TOPWAARDE
+   ============================================================ */
+let topValueCache = [];
+document.getElementById('topValueBtn').addEventListener('click', async () => {
+  if (!sb) return;
+  const list = document.getElementById('topValueList');
+  const isOpen = list.style.display !== 'none';
+  if (isOpen) { list.style.display = 'none'; return; }
+
+  const { data: exemplaren } = await sb.from('lorcana_exemplaren').select('*').gt('aantal', 0).range(0, 9999);
+  const parentIds = [...new Set((exemplaren || []).map(e => e.parent_id))];
+  if (!parentIds.length) { list.innerHTML = '<div class="empty-msg">Nog geen kaarten in bezit.</div>'; list.style.display = 'grid'; return; }
+
+  const { data: kaarten } = await sb.from('lorcana_set_kaarten').select('*').in('id', parentIds).range(0, 9999);
+  topValueCache = kaarten || [];
+  const byId = {}; topValueCache.forEach(k => byId[k.id] = k);
+
+  const rows = (exemplaren || []).map(e => {
+    const k = byId[e.parent_id];
+    if (!k) return null;
+    const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+    return { k, versie: e.versie, prijs: prijs || 0 };
+  }).filter(Boolean).sort((a, b) => b.prijs - a.prijs).slice(0, 30);
+
+  list.innerHTML = rows.map(r => `
+    <div class="lc-card owned">
+      <img src="${r.k.afbeelding || ''}">
+      <div class="badges">${inkBadge(r.k.ink)}${rarityBadge(r.k.rarity)}</div>
+      <div class="name">${r.k.naam}</div>
+      <div class="version">${r.versie} — $${r.prijs.toFixed(2)}</div>
+      <div class="num">#${r.k.collector_number} · ${r.k.set_naam}</div>
+    </div>`).join('');
+  list.style.display = 'grid';
+});
+
+/* ============================================================
+   INIT
+   ============================================================ */
+loadLorcastSets();
+</script>
+</body>
+</html>
