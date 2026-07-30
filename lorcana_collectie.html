@@ -130,13 +130,13 @@
     max-width: 700px; margin: 0 auto 16px; background: white; border-radius: 10px; padding: 14px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
-  #bulkProgressWrap { margin-top: 10px; display: none; }
-  #bulkBarTrack { width: 100%; height: 10px; border-radius: 6px; background: #eef1f4; overflow: hidden; margin-bottom: 6px; }
-  #bulkBarFill { height: 100%; border-radius: 6px; background: #3ecf8e; width: 0%; transition: width 0.2s ease; }
-  #bulkStatusText { font-size: 12px; color: #444; }
-  #bulkLog { max-height: 160px; overflow-y: auto; font-size: 11.5px; margin-top: 8px; }
-  #bulkLog .ok { color: #2e8b57; }
-  #bulkLog .fail { color: #c0392b; }
+  #bulkProgressWrap, #importProgressWrap { margin-top: 10px; display: none; }
+  #bulkBarTrack, #importBarTrack { width: 100%; height: 10px; border-radius: 6px; background: #eef1f4; overflow: hidden; margin-bottom: 6px; }
+  #bulkBarFill, #importBarFill { height: 100%; border-radius: 6px; background: #3ecf8e; width: 0%; transition: width 0.2s ease; }
+  #bulkStatusText, #importStatusText { font-size: 12px; color: #444; }
+  #bulkLog, #importLog { max-height: 220px; overflow-y: auto; font-size: 11.5px; margin-top: 8px; }
+  #bulkLog .ok, #importLog .ok { color: #2e8b57; }
+  #bulkLog .fail, #importLog .fail { color: #c0392b; }
 
   .modal {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -245,11 +245,18 @@
   <div id="bulkPanel">
     <button id="bulkStartBtn">🔄 Alle sets ophalen (Lorcast)</button>
     <button id="statusPerSetBtn" class="secondary">📋 Status per set</button>
+    <button id="importShinyBtn" class="secondary">📥 Importeer Shiny-export (JSON)</button>
+    <input type="file" id="importFileInput" accept="application/json,.json" style="display:none;">
     <div id="bulkProgressWrap">
       <div id="bulkBarTrack"><div id="bulkBarFill"></div></div>
       <div id="bulkStatusText"></div>
     </div>
     <div id="bulkLog"></div>
+    <div id="importProgressWrap">
+      <div id="importBarTrack"><div id="importBarFill"></div></div>
+      <div id="importStatusText"></div>
+    </div>
+    <div id="importLog"></div>
   </div>
 
   <div id="setProgressList" style="display:none;"></div>
@@ -282,7 +289,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v1.9";
+const APP_VERSION = "v2.0";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
@@ -828,6 +835,157 @@ document.getElementById('statusPerSetBtn').addEventListener('click', () => {
   wrap.style.display = open ? 'block' : 'none';
   document.getElementById('statusPerSetBtn').textContent = open ? '📋 Status per set verbergen' : '📋 Status per set';
 });
+
+/* ============================================================
+   IMPORT: Shiny-export (JSON) — eenmalig gebruik
+   ============================================================ */
+document.getElementById('importShinyBtn').addEventListener('click', () => {
+  document.getElementById('importFileInput').click();
+});
+
+document.getElementById('importFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) await runShinyImport(file);
+});
+
+async function runShinyImport(file) {
+  if (!sb) return alert('Configureer eerst Supabase (zie banner bovenaan).');
+
+  const wrap = document.getElementById('importProgressWrap');
+  const bar = document.getElementById('importBarFill');
+  const status = document.getElementById('importStatusText');
+  const log = document.getElementById('importLog');
+  wrap.style.display = 'block';
+  log.innerHTML = '';
+  bar.style.width = '0%';
+  status.textContent = 'Bestand inlezen...';
+
+  let raw;
+  try {
+    raw = JSON.parse(await file.text());
+  } catch (err) {
+    status.textContent = 'Kon het bestand niet lezen: ' + err.message;
+    return;
+  }
+
+  const lorcanaRows = (Array.isArray(raw) ? raw : []).filter(r => r.brand_name === 'Disney Lorcana');
+  if (!lorcanaRows.length) {
+    status.textContent = 'Geen "Disney Lorcana"-regels gevonden in dit bestand.';
+    return;
+  }
+
+  if (!lorcastSets.length) await loadLorcastSets();
+  const setByName = {};
+  lorcastSets.forEach(s => { setByName[s.name.trim().toLowerCase()] = s.code; });
+
+  // Normaliseert kaartnummers zoals "034" of "4A" naar "4a" — voorloopnullen-tolerant,
+  // en behoudt letter-varianten (bv. de 5 Dalmatian Puppy-drukken 4a t/m 4e).
+  function normNummer(s) {
+    const m = /^0*([0-9]+)([a-zA-Z]*)$/.exec(String(s).trim());
+    if (!m) return String(s).trim().toLowerCase();
+    return m[1] + m[2].toLowerCase();
+  }
+
+  // Groeperen per set + kaartnummer + versie (Shiny: rarity bevat "Foil" voor foil-versies)
+  const grouped = {};
+  const onbekendeSets = new Set();
+  let parseFouten = 0;
+
+  lorcanaRows.forEach(r => {
+    const setCode = setByName[(r.set_name || '').trim().toLowerCase()];
+    if (!setCode) { onbekendeSets.add(r.set_name); return; }
+    const m = /^([0-9]+[a-zA-Z]?)\s*\/\s*\d+$/.exec((r.discriminator || '').trim());
+    if (!m) { parseFouten++; return; }
+    const nummer = normNummer(m[1]);
+    const versie = /foil/i.test(r.rarity || '') ? 'Foil' : 'Normaal';
+    const aantal = parseInt(r.quantity, 10) || 0;
+    if (aantal <= 0) return;
+
+    grouped[setCode] = grouped[setCode] || {};
+    grouped[setCode][nummer] = grouped[setCode][nummer] || { Normaal: 0, Foil: 0 };
+    grouped[setCode][nummer][versie] += aantal;
+  });
+
+  const setCodes = Object.keys(grouped);
+  let done = 0, totaalOpgeslagen = 0, totaalNietGevonden = 0;
+  const nietGevondenLijst = [];
+
+  for (const setCode of setCodes) {
+    const setInfo = lorcastSets.find(s => s.code === setCode);
+    const setLabel = setInfo ? setInfo.name : setCode;
+    status.textContent = `Bezig met ${setLabel} (${done + 1}/${setCodes.length})...`;
+
+    let kaarten = [];
+    try {
+      const { data, error } = await sb.from('lorcana_set_kaarten').select('id,collector_number').eq('set_code', setCode).range(0, 999);
+      if (error) throw error;
+      kaarten = data || [];
+      if (!kaarten.length) {
+        await fetchAndStoreSetCards(setCode);
+        const { data: nieuwe, error: err2 } = await sb.from('lorcana_set_kaarten').select('id,collector_number').eq('set_code', setCode).range(0, 999);
+        if (err2) throw err2;
+        kaarten = nieuwe || [];
+      }
+    } catch (err) {
+      log.innerHTML += `<div class="fail">✘ ${setLabel}: kon set niet ophalen (${err.message})</div>`;
+      done++; bar.style.width = Math.round((done / setCodes.length) * 100) + '%';
+      continue;
+    }
+
+    const byNummer = {};
+    kaarten.forEach(k => { byNummer[normNummer(k.collector_number)] = k; });
+
+    const upsertRows = [];
+    let setOpgeslagen = 0, setNietGevonden = 0;
+    Object.entries(grouped[setCode]).forEach(([nummer, versies]) => {
+      const kaart = byNummer[nummer];
+      if (!kaart) {
+        setNietGevonden++;
+        nietGevondenLijst.push(`${setLabel} #${nummer}`);
+        return;
+      }
+      ['Normaal', 'Foil'].forEach(v => {
+        if (versies[v] > 0) {
+          upsertRows.push({ parent_id: kaart.id, set_code: setCode, collector_number: kaart.collector_number, versie: v, aantal: versies[v] });
+          setOpgeslagen++;
+        }
+      });
+    });
+
+    if (upsertRows.length) {
+      const { error } = await sb.from('lorcana_exemplaren').upsert(upsertRows, { onConflict: 'parent_id,versie' });
+      if (error) {
+        log.innerHTML += `<div class="fail">✘ ${setLabel}: fout bij opslaan (${error.message})</div>`;
+      } else {
+        log.innerHTML += `<div class="ok">✔ ${setLabel}: ${setOpgeslagen} exemplaren opgeslagen${setNietGevonden ? ', ' + setNietGevonden + ' niet gevonden' : ''}</div>`;
+      }
+    } else {
+      log.innerHTML += `<div class="fail">✘ ${setLabel}: niets om op te slaan${setNietGevonden ? ' (' + setNietGevonden + ' niet gevonden)' : ''}</div>`;
+    }
+
+    totaalOpgeslagen += setOpgeslagen;
+    totaalNietGevonden += setNietGevonden;
+    done++;
+    bar.style.width = Math.round((done / setCodes.length) * 100) + '%';
+    log.scrollTop = log.scrollHeight;
+    await sleep(120);
+  }
+
+  let samenvatting = `Klaar: ${totaalOpgeslagen} exemplaren geïmporteerd over ${setCodes.length} sets.`;
+  if (totaalNietGevonden) samenvatting += ` ${totaalNietGevonden} kaarten niet gevonden.`;
+  if (onbekendeSets.size) samenvatting += ` Onbekende sets overgeslagen: ${[...onbekendeSets].join(', ')}.`;
+  if (parseFouten) samenvatting += ` ${parseFouten} regel(s) met onverwacht nummerformaat overgeslagen.`;
+  status.textContent = samenvatting;
+
+  if (nietGevondenLijst.length) {
+    log.innerHTML += `<div style="margin-top:6px;font-weight:600;">Niet gevonden (${nietGevondenLijst.length}):</div>` +
+      nietGevondenLijst.slice(0, 50).map(x => `<div class="fail">• ${x}</div>`).join('');
+  }
+
+  await renderCollectieTab();
+  if (currentSetCode) await loadSetTab();
+}
 
 /* ============================================================
    MANCOLIJSTEN (print, per set)
