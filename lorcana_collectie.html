@@ -13,6 +13,7 @@
     background: #eef1f4;
     margin: 0;
     padding: 16px;
+    overflow-x: hidden;
   }
   h1 { text-align: center; color: #2c3e50; margin: 6px 0 2px; font-size: 22px; }
   #appVersion { text-align: center; color: #999; font-size: 12px; margin: 0 0 14px; }
@@ -101,6 +102,17 @@
     font-size: 11px; color: #666; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .ssr-top3-card .ssr-top3-price { font-size: 12.5px; font-weight: 700; color: #2c3e50; margin-top: 2px; }
+
+  @media (max-width: 640px) {
+    .set-summary-row { flex-direction: column; align-items: center; gap: 14px; padding: 14px; }
+    .ssr-stats { flex-direction: column; width: 100%; gap: 12px; }
+    .ssr-values { width: 100%; min-width: 0; }
+    .ssr-line { justify-content: center; gap: 8px; }
+    .ssr-top3 {
+      width: 100%; justify-content: center; border-left: none; padding-left: 0;
+      border-top: 1px dashed #ddd; padding-top: 10px;
+    }
+  }
   .ssr-top3-empty { flex: 1; text-align: center; color: #999; font-style: italic; font-size: 12.5px; }
 
   .ink-Amber { background: #d99a1f; }
@@ -291,7 +303,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v2.2";
+const APP_VERSION = "v2.3";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
