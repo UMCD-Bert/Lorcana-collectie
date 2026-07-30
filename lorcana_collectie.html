@@ -117,6 +117,7 @@
   .rar-Enchanted { background: #c2185b; }
   .rar-Promo { background: #34495e; }
 
+  #setProgressList { max-height: 55vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 2px; }
   .set-progress-row {
     max-width: 700px; margin: 0 auto 8px; background: white; border-radius: 10px; padding: 10px 14px;
     display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: pointer;
@@ -240,6 +241,7 @@
       <text id="collGaugePct" class="gauge-pct" x="100" y="90" text-anchor="middle">0%</text>
     </svg>
     <div id="collGaugeLabel" class="gauge-label">0 / 0</div>
+    <div id="collValueTotal" style="font-size:16px;font-weight:700;color:#2c3e50;margin-top:6px;">Totale collectiewaarde: $0.00</div>
   </div>
 
   <div id="bulkPanel">
@@ -289,7 +291,7 @@ const SUPABASE_KEY = "sb_publishable_KELGR-EkKYZBF_knnwdNvg_vA966Yqr";
 const LORCAST_BASE = "https://api.lorcast.com/v0";
 
 // Versienummer: ophogen bij elke nieuwe upload, zodat je altijd weet welke versie je ziet.
-const APP_VERSION = "v2.0";
+const APP_VERSION = "v2.2";
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 let sb = null;
@@ -317,6 +319,25 @@ async function lorcastFetch(path) {
   const res = await fetch(LORCAST_BASE + path);
   if (!res.ok) throw new Error('Lorcast ' + res.status + ' ' + path);
   return res.json();
+}
+
+// Supabase/PostgREST geeft standaard hooguit 1000 rijen terug per verzoek, ook als je
+// met .range() om meer vraagt. Deze helper haalt daarom alles op in pagina's van 1000,
+// tot een pagina minder dan 1000 rijen teruggeeft (zelfde les als bij de Pokémon-app).
+async function fetchAllRows(table, selectCols, applyFilters) {
+  const pageSize = 1000;
+  let from = 0;
+  let all = [];
+  while (true) {
+    let q = sb.from(table).select(selectCols);
+    if (applyFilters) q = applyFilters(q);
+    const { data, error } = await q.range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
 }
 
 function cardmarketSearchUrl(naam, versie) {
@@ -347,20 +368,30 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 /* ============================================================
    SETS: laden van Lorcast (met localStorage cache, 24u)
    ============================================================ */
+function sortLorcastSets(sets) {
+  // Reguliere, genummerde sets eerst (op releasedatum), promo/special sets (niet-numerieke code) achteraan.
+  return sets.slice().sort((a, b) => {
+    const aMain = /^\d+$/.test(a.code);
+    const bMain = /^\d+$/.test(b.code);
+    if (aMain !== bMain) return aMain ? -1 : 1;
+    return (a.released_at || '').localeCompare(b.released_at || '');
+  });
+}
+
 async function loadLorcastSets() {
-  const cacheRaw = localStorage.getItem('lorcana_sets_cache');
+  const cacheRaw = localStorage.getItem('lorcana_sets_cache_v2');
   if (cacheRaw) {
     const cache = JSON.parse(cacheRaw);
     if (Date.now() - cache.ts < 24 * 3600 * 1000) {
-      lorcastSets = cache.sets;
+      lorcastSets = sortLorcastSets(cache.sets);
       populateSetSelect();
       return;
     }
   }
   try {
     const data = await lorcastFetch('/sets');
-    lorcastSets = data.results.sort((a, b) => (a.released_at || '').localeCompare(b.released_at || ''));
-    localStorage.setItem('lorcana_sets_cache', JSON.stringify({ ts: Date.now(), sets: lorcastSets }));
+    lorcastSets = sortLorcastSets(data.results);
+    localStorage.setItem('lorcana_sets_cache_v2', JSON.stringify({ ts: Date.now(), sets: lorcastSets }));
   } catch (e) {
     console.error(e);
   }
@@ -599,18 +630,19 @@ function updateGauge(scope, owned, total) {
    SET-SAMENVATTING: gauge + waarde + top 3 duurste (in bezit)
    ============================================================ */
 async function computeCollectionTotalValue() {
-  const { data: exemplaren } = await sb.from('lorcana_exemplaren').select('parent_id,versie,aantal').gt('aantal', 0).range(0, 9999);
-  if (!exemplaren || !exemplaren.length) return 0;
-  const parentIds = [...new Set(exemplaren.map(e => e.parent_id))];
-  const { data: kaarten } = await sb.from('lorcana_set_kaarten').select('id,prijs_normaal,prijs_foil').in('id', parentIds).range(0, 9999);
+  const exemplaren = await fetchAllRows('lorcana_exemplaren', 'parent_id,versie,aantal', q => q.gt('aantal', 0));
+  if (!exemplaren.length) return 0;
+  // Niet filteren met .in() op alle parent_ids: bij duizenden exemplaren wordt de URL te lang.
+  // In plaats daarvan de hele (gepagineerde) kaartentabel ophalen.
+  const kaarten = await fetchAllRows('lorcana_set_kaarten', 'id,prijs_normaal,prijs_foil');
   const byId = {};
-  (kaarten || []).forEach(k => byId[k.id] = k);
+  kaarten.forEach(k => byId[k.id] = k);
   let total = 0;
   exemplaren.forEach(e => {
     const k = byId[e.parent_id];
     if (!k) return;
     const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
-    total += (prijs || 0) * e.aantal;
+    total += (Number(prijs) || 0) * e.aantal;
   });
   return total;
 }
@@ -727,10 +759,8 @@ async function renderCollectieTab() {
   if (!sb) return;
   const topValueList = document.getElementById('topValueList');
   try {
-    const { data: kaarten, error: errKrt } = await sb.from('lorcana_set_kaarten').select('*').range(0, 9999);
-    if (errKrt) throw errKrt;
-    const { data: exemplaren, error: errEx } = await sb.from('lorcana_exemplaren').select('parent_id,versie,aantal').range(0, 9999);
-    if (errEx) throw errEx;
+    const kaarten = await fetchAllRows('lorcana_set_kaarten', '*');
+    const exemplaren = await fetchAllRows('lorcana_exemplaren', 'parent_id,versie,aantal');
 
     const byId = {};
     (kaarten || []).forEach(k => byId[k.id] = k);
@@ -747,6 +777,15 @@ async function renderCollectieTab() {
     const totalCards = (kaarten || []).length;
     const ownedCards = ownedParents.size;
     updateGauge('coll', ownedCards, totalCards);
+
+    let totaalWaarde = 0;
+    ownedExemplaren.forEach(e => {
+      const k = byId[e.parent_id];
+      if (!k) return;
+      const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
+      totaalWaarde += (Number(prijs) || 0) * e.aantal;
+    });
+    document.getElementById('collValueTotal').textContent = 'Totale collectiewaarde: $' + totaalWaarde.toFixed(2);
 
     document.getElementById('setProgressList').innerHTML = Object.entries(perSet).map(([code, s]) => {
       const pct = s.total ? Math.round((s.owned / s.total) * 100) : 0;
@@ -771,7 +810,7 @@ async function renderCollectieTab() {
       const k = byId[e.parent_id];
       if (!k) return null;
       const prijs = e.versie === 'Foil' ? k.prijs_foil : k.prijs_normaal;
-      return { k, versie: e.versie, prijs: prijs || 0 };
+      return { k, versie: e.versie, prijs: Number(prijs) || 0 };
     }).filter(Boolean).sort((a, b) => b.prijs - a.prijs).slice(0, 30);
 
     topValueList.innerHTML = rows.length ? rows.map(r => `
